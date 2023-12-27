@@ -22,6 +22,7 @@ type StreamCmdable interface {
 	XGroupCreateConsumer(ctx context.Context, stream, group, consumer string) *IntCmd
 	XGroupDelConsumer(ctx context.Context, stream, group, consumer string) *IntCmd
 	XReadGroup(ctx context.Context, a *XReadGroupArgs) *XStreamSliceCmd
+	XReadGroupNoBlock(ctx context.Context, a *XReadGroupArgs) *XStreamSliceCmd
 	XAck(ctx context.Context, stream, group string, ids ...string) *IntCmd
 	XPending(ctx context.Context, stream, group string) *XPendingCmd
 	XPendingExt(ctx context.Context, a *XPendingExtArgs) *XPendingExtCmd
@@ -219,6 +220,30 @@ type XReadGroupArgs struct {
 	Count    int64
 	Block    time.Duration
 	NoAck    bool
+}
+
+func (c cmdable) XReadGroupNoBlock(ctx context.Context, a *XReadGroupArgs) *XStreamSliceCmd {
+	args := make([]interface{}, 0, 10+len(a.Streams))
+	args = append(args, "xreadgroup", "group", a.Group, a.Consumer)
+
+	keyPos := int8(4)
+	if a.Count > 0 {
+		args = append(args, "count", a.Count)
+		keyPos += 2
+	}
+	if a.NoAck {
+		args = append(args, "noack")
+		keyPos++
+	}
+	args = append(args, "streams")
+	keyPos++
+	for _, s := range a.Streams {
+		args = append(args, s)
+	}
+	cmd := NewXStreamSliceCmd(ctx, args...)
+	cmd.SetFirstKeyPos(keyPos)
+	_ = c(ctx, cmd)
+	return cmd
 }
 
 func (c cmdable) XReadGroup(ctx context.Context, a *XReadGroupArgs) *XStreamSliceCmd {
